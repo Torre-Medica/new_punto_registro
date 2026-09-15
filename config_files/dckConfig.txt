@@ -1,0 +1,1 @@
+{  "CARLOPPPIN": 594,  "BIKELOOPPIN": 580,        "CARBARRIERPIN": 591,  "LEDRINGPIN": 600,        "VISITORBUTTONPIN": 578,   "ACTIVATION_TIME_MS": 1000}

@@ -1,0 +1,78 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Monitor de Estado</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+      }
+      img {
+        object-fit: contain;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- <div id="statusLog" class="log"></div> -->
+
+    <img src="/img/PRESS_BUTTON.png" alt="" width="100%" height="100%" id="image-status"/>
+
+    <script>
+
+      const imageStatus = document.getElementById("image-status");
+      const socket = io();
+
+      const statusLog = document.getElementById("statusLog");
+
+      const validResponseCodes = [
+        "ACCESS_GRANTED",
+        "USER_BLACKLISTED",
+        "PROCESS_NOT_FOUND",
+        "INVALID_USER_TYPE",
+        "ZONE_FULL",
+        "USER_NOT_FOUND",
+        "VEHICLE_TYPE_REQUIRED",
+        "INVALID_PRIVATE_ENTRY_ID",
+        "INVALID_PRIVATE_EXIT_ID",
+        "INVALID_QR_CODE",
+        "UNKNOWN_DEVICE_TYPE",
+        "NO_OUTCOME_GENERATED",
+        "ERROR",
+      ];
+      function isValidResponseCode(code) {
+        return validResponseCodes.includes(code);
+      }
+
+      const getImageSource = (statusCode) => {
+        if (!isValidResponseCode(statusCode)) {
+          return "ERROR";
+        }
+
+        return `/img/${statusCode}.png`
+
+
+      };
+
+      socket.on("status-message", ({ statusCode, message }) => {
+        const source = getImageSource(statusCode)
+        if(source === "ERROR"){
+          console.error(message)
+          return
+        }
+        imageStatus.src = source;
+        setTimeout(()=>{
+          imageStatus.src = "/img/PRESS_BUTTON.png"
+        }, 5000)
+      });
+
+
+
+    </script>
+  </body>
+</html>

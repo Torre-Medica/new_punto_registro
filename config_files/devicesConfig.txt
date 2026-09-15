@@ -1,0 +1,8 @@
+{
+  "UHF_ANTENNA": false,
+  "QR_SCANNER": true,
+  "I2C_RELAY": false,
+  "HASPRINTER": true,
+  "DCK_RELAY": true,
+  "PASSTHROUGHLPR": false
+}
