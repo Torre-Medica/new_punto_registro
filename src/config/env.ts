@@ -8,6 +8,7 @@ const envConfig = {
   I2C_ADDRESS: parseInt(process.env.I2C_ADDRESS || '0x20', 16),
   I2C_REGISTER:parseInt(process.env.I2C_REGISTER || '0x00'),
   TIMELAPSEBETWEENREADINGS:parseInt(process.env.TIMELAPSEBETWEENREADINGS || '1000'),
+  BUTTON_REQUEST_TTL_MS: parseInt(process.env.BUTTON_REQUEST_TTL_MS || '300000', 10),
   JAVA_SERVER_URL: process.env.JAVA_SERVER_URL || `http://localhost:8080/imprimir`,
   DEVICETYPE: process.env.DEVICETYPE || "OUT",
   DETECTEDPLATE: process.env.DETECTEDPLATE || false,

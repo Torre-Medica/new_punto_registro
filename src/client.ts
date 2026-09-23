@@ -10,6 +10,21 @@ import { dck } from "./config/dck";
 import { LPRService } from "./config/lpr";
 
 const lpr = new LPRService();
+const buttonRequestTtlMs = Math.min(
+  Math.max(envConfig.BUTTON_REQUEST_TTL_MS, 120000),
+  300000,
+);
+
+const safeEmitButtonRequest = (payload: Record<string, any>) => {
+  if (!socket.connected) {
+    console.log('[boton] Socket no conectado; se descarta el evento para evitar cola.');
+    return;
+  }
+
+  // Los eventos de boton no deben quedar en el buffer de Socket.IO durante una desconexion.
+  socket.volatile.emit('request_entry', payload);
+  console.log(`[boton] Evento enviado; TTL configurado: ${buttonRequestTtlMs}ms.`);
+};
 
 // 🚀 Iniciar listener directo en puerto 17005 (ejemplo)
 
@@ -142,7 +157,7 @@ if (config.I2C_RELAY) {
         if (envConfig.DEVICETYPE.includes("IN")) {
           vehicleKind = await vehicleType.vehicleKind();
           console.log("Boton activado.");
-          socket.emit("request_entry", {
+          safeEmitButtonRequest({
             devicesType: deviceType,
             url: "",
             plate: "",
@@ -171,7 +186,7 @@ if (config.DCK_RELAY) {
     
     console.log("Boton activado.");
     if (envConfig.DEVICETYPE.includes("IN")) {
-      socket.emit("request_entry", {
+      safeEmitButtonRequest({
         devicesType: deviceType,
         url: url,
         plate: plate,
