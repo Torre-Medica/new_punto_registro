@@ -5,7 +5,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { logToFile } from './config/logs'; // Importa la función para logs
 import './client'; // Importa `client.ts` para que se ejecute al iniciar
 import path from 'path';
-import {exec} from "child_process"
+import { exec } from "child_process";
 logToFile("¡Inicio del servidor!");
 
 
@@ -45,7 +45,17 @@ io.on('connection', (socket) => {
 // Iniciar el servidor
 server.listen(port, () => {
   console.log(`Servidor escuchando en el puerto ${port}`);
-  if (process.env.DEVICETYPE && process.env.DEVICETYPE==='IN' ) {
-    exec(`chromium-browser --kiosk http://localhost:4000`)
+  if (process.env.KIOSK_MODE === 'true') {
+    const kioskUrl = process.env.KIOSK_URL || `http://localhost:${port}`;
+    exec(`command -v chromium-browser || command -v chromium`, (error, stdout) => {
+      const browser = stdout.trim();
+
+      if (error || !browser) {
+        console.error('No se encontro chromium-browser ni chromium para el modo kiosk.');
+        return;
+      }
+
+      exec(`${browser} --kiosk --incognito --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state --password-store=basic ${kioskUrl}`);
+    });
   }
 });

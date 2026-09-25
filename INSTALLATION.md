@@ -74,6 +74,17 @@ Ejecutar en modo desarrollo
 npm run dev
 ```
 
+Modo kiosk
+
+Para abrir Chromium en pantalla completa al iniciar el servidor, configura estas variables en `.env`:
+
+```dotenv
+KIOSK_MODE=true
+KIOSK_URL=http://localhost:4000
+```
+
+El sistema debe tener instalado `chromium-browser` o `chromium`, y la sesion grafica debe estar disponible (`DISPLAY` y `XAUTHORITY`). Para desactivarlo, usa `KIOSK_MODE=false`.
+
 Construir y ejecutar en producción
 
 ```bash
