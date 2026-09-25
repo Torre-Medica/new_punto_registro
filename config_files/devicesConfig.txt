@@ -2,7 +2,7 @@
   "UHF_ANTENNA": false,
   "QR_SCANNER": true,
   "I2C_RELAY": false,
-  "HASPRINTER": true,
+  "HASPRINTER": false,
   "DCK_RELAY": true,
   "PASSTHROUGHLPR": false
 }

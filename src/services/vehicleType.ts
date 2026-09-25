@@ -1,11 +1,11 @@
 import { getDevicesConfig } from "../config/devices";
-import { I2CService } from "../config/i2c";
 import { dck } from "../config/dck"; // Importación explícita de la instancia
 
 const config = getDevicesConfig();
 
 async function vehicleKind(): Promise<'CARRO' | 'MOTO' | false> {
   if (config.I2C_RELAY) {
+    const { I2CService } = require("../config/i2c") as typeof import("../config/i2c");
     const i2CService = new I2CService();
     console.log("Comunicación I2C habilitada.");
     const responseLoopCarro = await i2CService.isPinActive("IN2");

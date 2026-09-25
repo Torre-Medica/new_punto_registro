@@ -1,5 +1,4 @@
 import { getDevicesConfig } from "../config/devices";
-import { I2CService } from "../config/i2c";
 import { dck } from "../config/dck";
 
 const config = getDevicesConfig();
@@ -8,6 +7,7 @@ async function openBarrier() {
   console.log("🟢 Se llamó a openBarrier()");
 
   if (config.I2C_RELAY) {
+    const { I2CService } = require("../config/i2c") as typeof import("../config/i2c");
     console.log("🔌 Comunicación I2C habilitada, activando talanquera...");
     const i2CService = new I2CService();
     i2CService.init();

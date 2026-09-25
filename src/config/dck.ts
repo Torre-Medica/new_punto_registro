@@ -5,6 +5,36 @@ let gpio: any = require("onoff").Gpio;
 
 const CONFIG_DIR = path.join(process.cwd(), "config_files");
 const CONFIG_FILE = path.join(CONFIG_DIR, "dckConfig.txt");
+const SYSFS_GPIO_DIR = "/sys/class/gpio";
+
+// En kernels >= 6.6 el GPIO del SoC ya no empieza en 0 en sysfs (Pi 4: 512, Pi 5: 571).
+// Se detecta la base del controlador principal para poder configurar los pines con numeracion BCM.
+function getSocGpioChip(): { base: number; ngpio: number } | null {
+  try {
+    for (const entry of fs.readdirSync(SYSFS_GPIO_DIR)) {
+      if (!entry.startsWith("gpiochip")) continue;
+      const chipDir = path.join(SYSFS_GPIO_DIR, entry);
+      const label = fs.readFileSync(path.join(chipDir, "label"), "utf-8").trim();
+      if (/^pinctrl-(bcm2711|bcm2835|rp1)$/.test(label)) {
+        return {
+          base: parseInt(fs.readFileSync(path.join(chipDir, "base"), "utf-8"), 10),
+          ngpio: parseInt(fs.readFileSync(path.join(chipDir, "ngpio"), "utf-8"), 10),
+        };
+      }
+    }
+  } catch (error) {
+    console.warn("No se pudo detectar la base GPIO del SoC:", error);
+  }
+  return null;
+}
+
+const socGpioChip = getSocGpioChip();
+
+// Acepta numeracion BCM (0..ngpio-1) o el numero sysfs absoluto (compatibilidad con configs antiguas).
+function toSysfsPin(pin: number): number {
+  if (socGpioChip && pin < socGpioChip.ngpio) return socGpioChip.base + pin;
+  return pin;
+}
 
 export class DCK {
   private config!: Record<string, number>;
@@ -82,19 +112,23 @@ export class DCK {
     console.log("Reconfigurando pines (initializePins)");
     this.cleanup();
 
-    this.carLoopPin = new gpio(this.config.CARLOPPPIN, "in", "both");
-    this.bikeLoopPin = new gpio(this.config.BIKELOOPPIN, "in", "both");
+    if (socGpioChip) {
+      console.log(`Base GPIO del SoC: ${socGpioChip.base} (${socGpioChip.ngpio} lineas)`);
+    }
 
-    this.carBarrierPin = new gpio(this.config.CARBARRIERPIN, "out", undefined, {
+    this.carLoopPin = new gpio(toSysfsPin(this.config.CARLOPPPIN), "in", "both");
+    this.bikeLoopPin = new gpio(toSysfsPin(this.config.BIKELOOPPIN), "in", "both");
+
+    this.carBarrierPin = new gpio(toSysfsPin(this.config.CARBARRIERPIN), "out", undefined, {
       unexportOnClose: false,
     });
     this.carBarrierPin.writeSync(0); // asegurarse de que inicia en LOW
 
-    this.ledRingPin = new gpio(this.config.LEDRINGPIN, "out");
+    this.ledRingPin = new gpio(toSysfsPin(this.config.LEDRINGPIN), "out");
     this.ledRingPin.writeSync(0);
 
     this.visitorButtonPin = new gpio(
-      this.config.VISITORBUTTONPIN,
+      toSysfsPin(this.config.VISITORBUTTONPIN),
       "in",
       "rising",
       { debounceTimeout: 200 }

@@ -2,7 +2,6 @@ import socket from "./config/socket";
 import { getDevicesConfig } from "./config/devices";
 import UHFAntenna from "./config/uhf";
 import qrScanner from "./config/qrScanner";
-import { I2CService } from "./config/i2c"; // Importación clara del módulo corregido
 const config = getDevicesConfig();
 import envConfig from "./config/env";
 import vehicleType from "./services/vehicleType";
@@ -137,6 +136,7 @@ if (config.QR_SCANNER) {
 }
 
 if (config.I2C_RELAY) {
+  const { I2CService } = require("./config/i2c") as typeof import("./config/i2c");
   const i2CService = new I2CService();
   console.log("Comunicación I2C habilitada.");
   i2CService.init();
@@ -173,28 +173,33 @@ if (config.I2C_RELAY) {
 }
 
 if (config.DCK_RELAY) {
-  dck.init();
-  let vehicleKind: any = false;
-  let plate: string = "";
-  let url: string = "";
+  try {
+    dck.init();
+    let vehicleKind: any = false;
+    let plate: string = "";
+    let url: string = "";
 
-  dck.onVisitorButtonPressed(async () => {
-    vehicleKind = await vehicleType.vehicleKind();
+    dck.onVisitorButtonPressed(async () => {
+      vehicleKind = await vehicleType.vehicleKind();
       const plateInfo = await infoPlate();
       plate = plateInfo.plate;
       url = plateInfo.url;
-    
-    console.log("Boton activado.");
-    if (envConfig.DEVICETYPE.includes("IN")) {
-      safeEmitButtonRequest({
-        devicesType: deviceType,
-        url: url,
-        plate: plate,
-        vehicleKind: vehicleKind,
-      });
-    } else if (envConfig.DEVICETYPE.includes("OUT")) {
-      console.log("No hay acciones por botón");}
+
+      console.log("Boton activado.");
+      if (envConfig.DEVICETYPE.includes("IN")) {
+        safeEmitButtonRequest({
+          devicesType: deviceType,
+          url: url,
+          plate: plate,
+          vehicleKind: vehicleKind,
+        });
+      } else if (envConfig.DEVICETYPE.includes("OUT")) {
+        console.log("No hay acciones por botón");
+      }
     });
+  } catch (error) {
+    console.error("DCK no disponible; el servidor continuará sin hardware.", error);
+  }
 } else {
   console.log("Comunicación DCK deshabilitada.");
 }
