@@ -1,5 +1,5 @@
 {
-  "UHF_ANTENNA": false,
+  "UHF_ANTENNA": true,
   "QR_SCANNER": true,
   "I2C_RELAY": false,
   "HASPRINTER": false,
