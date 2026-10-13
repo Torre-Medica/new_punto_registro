@@ -111,3 +111,43 @@ pm2 logs projectNewPr
 
 Notas operativas
 - Si el hardware está presente prueba `i2c-tools` para comprobar dispositivos I2C.
+
+## Configuración local (`config_files/`) — NO se versiona
+
+La carpeta `config_files/` (`devicesConfig.txt`, `dckConfig.txt`, `printerConfig.txt`, `uhfConfig.txt`) está en `.gitignore`: cada equipo conserva su propia configuración y un `git pull` no la toca. Si falta un archivo, el punto lo crea con valores por defecto al arrancar.
+
+**Primer `git pull` en un equipo que aún versionaba `config_files/`:** el commit que los quita del repositorio hace que git los borre de la carpeta (o que el pull falle si fueron modificados). Hacer copia antes:
+
+```bash
+cp -r config_files config_files.bak
+git pull
+cp -r config_files.bak/. config_files/   # restaura la configuración real del equipo
+```
+
+Si se olvida la copia, se regeneran los valores por defecto (sin UHF, `LPR_AUTO_EXIT=false`, etc.) y hay que reconfigurar. Después de ese primer pull no vuelve a ocurrir.
+
+## Salida automática por placa (`LPR_AUTO_EXIT`) — solo puntos de salida
+
+En `config_files/devicesConfig.txt`:
+
+```json
+{
+  "UHF_ANTENNA": true,
+  "QR_SCANNER": true,
+  "I2C_RELAY": false,
+  "HASPRINTER": false,
+  "DCK_RELAY": true,
+  "PASSTHROUGHLPR": false,
+  "LPR_AUTO_EXIT": true
+}
+```
+
+- `LPR_AUTO_EXIT` (por defecto `false`) es independiente de `PASSTHROUGHLPR`, que no cambia. Debe ser el booleano `true` (no el texto `"true"`).
+- Solo tiene efecto con `DEVICETYPE=OUT` en `.env`. En puntos `IN` se ignora.
+- El punto lo informa al backend en el `auth` del socket **al conectarse**: tras cambiarlo hay que reiniciar (`pm2 restart projectNewPr`).
+- El punto **no decide nada**: el backend lee la placa de la cámara de salida y, si el proceso puede salir, envía `openbarrier`. El punto activa el relé (I2C `OUT1` o DCK) y responde un ack `{opened:true|false}`. El backend solo cierra el proceso si recibe `opened:true` en 3 s.
+- En el log aparece al iniciar: `LPR_AUTO_EXIT: true (DEVICETYPE=OUT)`.
+- Si no hay relé configurado (ni I2C ni DCK), responde `opened:false` y el proceso no se cierra.
+- Para apagarlo en un punto: `"LPR_AUTO_EXIT": false` y reiniciar.
+
+Requiere que el backend tenga `LPR_AUTO_EXIT=true` y la cámara configurada (ver `docs/despliegue-lpr-salida-automatica.md` en `new-backend-nexo`).

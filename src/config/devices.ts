@@ -20,6 +20,7 @@ function loadDevicesConfig(): Record<string, boolean | number> {
       HASPRINTER: false,
       DCK_RELAY: false,
       PASSTHROUGHLPR: false,
+      LPR_AUTO_EXIT: false,
     };
     saveDevicesConfig(defaultConfig);
     return defaultConfig;
@@ -35,6 +36,8 @@ function loadDevicesConfig(): Record<string, boolean | number> {
       HASPRINTER: Boolean(parsedConfig.HASPRINTER ?? false),
       DCK_RELAY: Boolean(parsedConfig.DCK_RELAY ?? false),
       PASSTHROUGHLPR: Boolean(parsedConfig.PASSTHROUGHLPR ?? false),
+      // Solo el booleano true lo activa; "false" como texto no.
+      LPR_AUTO_EXIT: parsedConfig.LPR_AUTO_EXIT === true,
     };
   } catch (error) {
     console.error('Error al leer el archivo de configuración:', error);
@@ -45,6 +48,7 @@ function loadDevicesConfig(): Record<string, boolean | number> {
       HASPRINTER: false,
       DCK_RELAY: false,
       PASSTHROUGHLPR: false,
+      LPR_AUTO_EXIT: false,
     }; // Valores por defecto en caso de error
   }
 }
