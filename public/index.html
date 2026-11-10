@@ -3,76 +3,298 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Monitor de Estado</title>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/messages.js"></script>
     <style>
+      :root {
+        --ink: #111111;
+        --muted: #3f3f46;
+        --ok: #15803d;
+        --warn: #b45309;
+        --error: #b91c1c;
+      }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 0;
         height: 100dvh;
         width: 100vw;
         overflow: hidden;
+        background: #ffffff;
+        color: var(--ink);
+        font-family: "Open Sans", "Noto Sans", "DejaVu Sans", Arial, sans-serif;
       }
-      img {
+      .screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #status { display: none; }
+      body.showing #status { display: flex; }
+      body.showing #idle { display: none; }
+      .idle-title {
+        margin: 0;
+        font-size: min(6.6vw, 9vh);
+        line-height: 1.08;
+        font-weight: 800;
+        color: #1e3a8a;
+      }
+      .idle-text {
+        margin: 0;
+        max-width: 24ch;
+        font-size: min(5vw, 7vh);
+        line-height: 1.15;
+        font-weight: 800;
+        text-wrap: balance;
+      }
+      .idle-hint {
+        margin: 0;
+        max-width: 40ch;
+        font-size: min(2.8vw, 4vh);
+        line-height: 1.25;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .content {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.4vh;
+        padding: 2vh 5vw 0;
+        text-align: center;
+      }
+      .icon {
+        flex-shrink: 0;
+        background-repeat: no-repeat;
+      }
+      .error-image {
+        flex-shrink: 1;
+        min-height: 0;
+        height: 46vh;
+        max-width: 80vw;
         object-fit: contain;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(15, 23, 42, 0.18);
       }
+      .error-image[hidden], .icon[hidden] { display: none; }
+      .copy {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.4vh;
+      }
+      /* Errores con imagen: solo la imagen, grande y centrada (ya trae su texto) */
+      #status.with-image .content { padding: 3vh 3vw; }
+      #status.with-image .copy,
+      #status.with-image .footer { display: none; }
+      #status.with-image .error-image {
+        width: auto;
+        height: auto;
+        max-width: 94vw;
+        max-height: 94vh;
+        min-height: 70vh;
+      }
+      /* Pantalla de espera del punto de entrada: imagen del equipo a pantalla completa */
+      #idle-image {
+        position: absolute;
+        z-index: 2;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #ffffff;
+      }
+      #idle-image[hidden] { display: none; }
+      .icon.spinner {
+        border-radius: 50%;
+        border: solid #e4e4e7;
+        border-top-color: var(--ok);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      h1 {
+        margin: 0;
+        font-size: min(7.4vw, 10vh);
+        line-height: 1.08;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      h1.ok { color: var(--ok); }
+      h1.warn { color: var(--warn); }
+      h1.error { color: var(--error); }
+      .text {
+        margin: 0;
+        max-width: 30ch;
+        font-size: min(3.9vw, 5.4vh);
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--ink);
+        text-wrap: balance;
+      }
+      /* Franja inferior: logos y ondas de las imagenes originales */
+      .footer {
+        position: relative;
+        flex-shrink: 0;
+        height: calc(100vw * 200 / 1024);
+        max-height: 30vh;
+        background: url("/img/ACCESS_GRANTED.png") no-repeat center bottom / 100vw auto;
+      }
+      .operator {
+        position: absolute;
+        right: 2vw;
+        bottom: 2.4vh;
+        max-width: 62vw;
+        padding: 0.7vh 1.4vw;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--muted);
+        font-size: min(1.8vw, 2.6vh);
+        line-height: 1.3;
+        text-align: left;
+      }
+      .operator b { color: var(--ink); }
+      .operator .raw { display: block; opacity: 0.8; }
+      .operator:empty { display: none; }
     </style>
   </head>
   <body>
-    <!-- <div id="statusLog" class="log"></div> -->
+    <main id="idle" class="screen">
+      <img id="idle-image" src="/img/PRESS_BUTTON.png" alt="" hidden />
+      <section class="content">
+        <h1 class="idle-title" id="idle-title"></h1>
+        <p class="idle-text" id="idle-text"></p>
+        <p class="idle-hint" id="idle-hint"></p>
+      </section>
+      <footer class="footer"></footer>
+    </main>
 
-    <img src="/img/PRESS_BUTTON.png" alt="" width="100%" height="100%" id="image-status"/>
+    <main id="status" class="screen" aria-live="assertive">
+      <section class="content">
+        <img class="error-image" id="status-image" alt="" hidden />
+        <div class="icon" id="status-icon" role="img" aria-hidden="true"></div>
+        <div class="copy">
+          <h1 id="status-title"></h1>
+          <p class="text" id="status-text"></p>
+        </div>
+      </section>
+      <footer class="footer">
+        <div class="operator" id="status-operator"></div>
+      </footer>
+    </main>
 
     <script>
-
-      const imageStatus = document.getElementById("image-status");
       const socket = io();
+      const body = document.body;
+      const iconEl = document.getElementById("status-icon");
+      const titleEl = document.getElementById("status-title");
+      const textEl = document.getElementById("status-text");
+      const operatorEl = document.getElementById("status-operator");
+      const imageEl = document.getElementById("status-image");
+      let deviceType = "IN";
 
-      const statusLog = document.getElementById("statusLog");
+      // Pantalla de espera segun el tipo de punto (entrada o salida)
+      const paintIdle = () => {
+        const idle = window.IDLE_MESSAGES[deviceType] || window.IDLE_MESSAGES.IN;
+        document.getElementById("idle-title").textContent = idle.title;
+        document.getElementById("idle-text").textContent = idle.text;
+        document.getElementById("idle-hint").textContent = idle.hint;
+        document.getElementById("idle-image").hidden = deviceType !== "IN";
+      };
+      paintIdle();
 
-      const validResponseCodes = [
-        "ACCESS_GRANTED",
-        "USER_BLACKLISTED",
-        "PROCESS_NOT_FOUND",
-        "INVALID_USER_TYPE",
-        "ZONE_FULL",
-        "USER_NOT_FOUND",
-        "VEHICLE_TYPE_REQUIRED",
-        "INVALID_PRIVATE_ENTRY_ID",
-        "INVALID_PRIVATE_EXIT_ID",
-        "INVALID_QR_CODE",
-        "UNKNOWN_DEVICE_TYPE",
-        "NO_OUTCOME_GENERATED",
-        "ERROR",
-      ];
-      function isValidResponseCode(code) {
-        return validResponseCodes.includes(code);
-      }
+      // Tiempo en pantalla antes de volver al inicio
+      const OK_MS = 5000;
+      const ERROR_MS = 9000;
+      let resetTimer = null;
 
-      const getImageSource = (statusCode) => {
-        if (!isValidResponseCode(statusCode)) {
-          return "ERROR";
+      const escapeHtml = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+      // Dibuja un recorte de una imagen de 1024x600 a la altura pedida
+      const paintIcon = (name, factor = 1) => {
+        const icon = window.ICONS[name] || window.ICONS.cone;
+        const targetHeight = Math.min(window.innerHeight * 0.26, window.innerWidth * 0.2) * factor;
+        iconEl.className = "icon";
+        if (icon.spinner) {
+          const size = targetHeight * 0.7;
+          iconEl.classList.add("spinner");
+          iconEl.style.cssText = `width:${size}px;height:${size}px;border-width:${size * 0.1}px`;
+          return;
         }
-
-        return `/img/${statusCode}.png`
-
-
+        const [x, y, w, h] = icon.box;
+        const [imageWidth, imageHeight] = icon.size || [1024, 600];
+        const scale = targetHeight / h;
+        iconEl.style.cssText = [
+          `width:${w * scale}px`,
+          `height:${h * scale}px`,
+          `background-image:url("${icon.src}")`,
+          `background-size:${imageWidth * scale}px ${imageHeight * scale}px`,
+          `background-position:${-x * scale}px ${-y * scale}px`,
+        ].join(";");
       };
 
-      socket.on("status-message", ({ statusCode, message }) => {
-        const source = getImageSource(statusCode)
-        if(source === "ERROR"){
-          console.error(message)
-          return
+      const showIdle = () => {
+        clearTimeout(resetTimer);
+        body.classList.remove("showing");
+      };
+
+      const show = (payload) => {
+        if (payload.statusCode === "SERVER_RESTORED") {
+          showIdle();
+          return;
         }
-        imageStatus.src = source;
-        setTimeout(()=>{
-          imageStatus.src = "/img/PRESS_BUTTON.png"
-        }, 5000)
+        const screen = window.resolveScreenMessage(payload);
+        document.getElementById("status").classList.toggle("with-image", Boolean(screen.image));
+        if (screen.image) {
+          imageEl.src = screen.image;
+          imageEl.hidden = false;
+          iconEl.hidden = true;
+        } else {
+          imageEl.hidden = true;
+          iconEl.hidden = false;
+          paintIcon(screen.icon);
+        }
+        titleEl.textContent = screen.title;
+        titleEl.className = screen.tone || "error";
+        textEl.textContent = screen.text || "";
+
+        operatorEl.innerHTML = !screen.image && screen.operator
+          ? `<b>Operador:</b> ${escapeHtml(screen.operator)}`
+          : "";
+
+        body.classList.add("showing");
+        // Textos largos: se reduce el icono hasta que todo quepa sobre la franja
+        const content = document.querySelector(".content");
+        for (let factor = 0.85; !screen.image && factor >= 0.4 && content.scrollHeight > content.clientHeight; factor -= 0.15) {
+          paintIcon(screen.icon, factor);
+        }
+        clearTimeout(resetTimer);
+        if (!screen.hold) {
+          resetTimer = setTimeout(showIdle, screen.tone === "ok" ? OK_MS : ERROR_MS);
+        }
+      };
+
+      socket.on("screen-config", (config) => {
+        if (config && config.deviceType) {
+          deviceType = config.deviceType;
+          paintIdle();
+        }
       });
 
-
-
+      socket.on("status-message", (payload) => {
+        if (payload && payload.deviceType && payload.deviceType !== deviceType) {
+          deviceType = payload.deviceType;
+          paintIdle();
+        }
+        if (payload && payload.message) console.log("[pantalla]", payload.statusCode, payload.message);
+        show(payload || {});
+      });
     </script>
   </body>
 </html>

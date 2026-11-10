@@ -1,4 +1,4 @@
-import socket from "./config/socket";
+import socket, { notifyScreen } from "./config/socket";
 import { getDevicesConfig } from "./config/devices";
 import UHFAntenna from "./config/uhf";
 import qrScanner from "./config/qrScanner";
@@ -17,6 +17,7 @@ const buttonRequestTtlMs = Math.min(
 const safeEmitButtonRequest = (payload: Record<string, any>) => {
   if (!socket.connected) {
     console.log('[boton] Socket no conectado; se descarta el evento para evitar cola.');
+    notifyScreen('SERVER_ERROR', 'Botón oprimido sin conexión con el servidor');
     return;
   }
 
