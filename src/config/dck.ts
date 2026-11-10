@@ -41,11 +41,14 @@ export class DCK {
   private carLoopPin: typeof gpio;
   private bikeLoopPin: typeof gpio;
   private carBarrierPin: typeof gpio;
+  private secondRelayPin: typeof gpio | null = null;
   private ledRingPin: typeof gpio;
   private visitorButtonPin: typeof gpio;
 
   private alreadyInitialized = false;
   private visitorButtonCallback: (() => void) | null = null;
+  private ledWatchInterval: NodeJS.Timeout | null = null;
+  private greenLightTimeout: NodeJS.Timeout | null = null;
 
   public init() {
     if (this.alreadyInitialized) return;
@@ -60,15 +63,90 @@ export class DCK {
   public openCarBarrier() {
     console.log("Activando pin de barrera (pulso)");
     this.carBarrierPin.writeSync(1);
-    this.ledRingPin.writeSync(1)
     setTimeout(() => {
       this.carBarrierPin.writeSync(0);
-      this.ledRingPin.writeSync(0)
       console.log("Pulso finalizado, pin desactivado.");
     }, this.config.ACTIVATION_TIME_MS);
-    //setTimeout(() => this.turnOffLedRing(), 300);
+
+    this.turnOnLedRing();
+    this.watchVehiclePassage();
+    this.turnOnGreenLight();
   }
-  
+
+  // Luz verde en el segundo rele (SECONDRELAYPIN): encendida un tiempo fijo, GREEN_LIGHT_TIME_MS.
+  private turnOnGreenLight() {
+    if (!this.secondRelayPin) return;
+
+    if (this.greenLightTimeout) clearTimeout(this.greenLightTimeout);
+    this.secondRelayPin.writeSync(1);
+    console.log("Luz verde encendida.");
+
+    this.greenLightTimeout = setTimeout(() => {
+      this.greenLightTimeout = null;
+      try {
+        this.secondRelayPin?.writeSync(0);
+        console.log("Luz verde apagada.");
+      } catch (error) {
+        console.error("Error apagando luz verde:", error);
+      }
+    }, this.config.GREEN_LIGHT_TIME_MS ?? 5000);
+  }
+
+  // Mantiene el LED encendido hasta que el vehiculo sale del lazo:
+  // se apaga cuando un lazo que estuvo activo vuelve a 0 durante LED_CLEAR_MS.
+  // Un lazo que nunca baja (p. ej. desconectado y fijo en 1) no lo apaga; para eso esta LED_MAX_TIME_MS.
+  private watchVehiclePassage() {
+    this.stopLedWatch();
+
+    const minTime = this.config.ACTIVATION_TIME_MS ?? 1000;
+    const maxTime = this.config.LED_MAX_TIME_MS ?? 30000;
+    const clearTime = this.config.LED_CLEAR_MS ?? 500;
+    const start = Date.now();
+    const loops = [this.carLoopPin, this.bikeLoopPin];
+    const seenActive = loops.map(() => false);
+    const clearSince: (number | null)[] = loops.map(() => null);
+
+    this.ledWatchInterval = setInterval(() => {
+      const now = Date.now();
+      let passed = false;
+
+      try {
+        loops.forEach((pin, i) => {
+          if (pin.readSync() === 1) {
+            seenActive[i] = true;
+            clearSince[i] = null;
+          } else if (seenActive[i]) {
+            clearSince[i] = clearSince[i] ?? now;
+            if (now - clearSince[i]! >= clearTime) passed = true;
+          }
+        });
+      } catch (error) {
+        console.error("Error leyendo lazos, apagando LED:", error);
+        this.stopLedWatch();
+        this.turnOffLedRing();
+        return;
+      }
+
+      const elapsed = now - start;
+      if ((passed && elapsed >= minTime) || elapsed >= maxTime) {
+        this.stopLedWatch();
+        this.turnOffLedRing();
+        console.log(
+          passed
+            ? "Vehiculo paso el lazo, LED apagado."
+            : `LED apagado por tiempo maximo (${maxTime} ms).`
+        );
+      }
+    }, 100);
+  }
+
+  private stopLedWatch() {
+    if (this.ledWatchInterval) {
+      clearInterval(this.ledWatchInterval);
+      this.ledWatchInterval = null;
+    }
+  }
+
 
   public turnOnLedRing() {
     this.ledRingPin.writeSync(1);
@@ -124,7 +202,14 @@ export class DCK {
     });
     this.carBarrierPin.writeSync(0); // asegurarse de que inicia en LOW
 
-    this.ledRingPin = new gpio(toSysfsPin(this.config.LEDRINGPIN), "out");
+    if (this.config.SECONDRELAYPIN !== undefined) {
+      this.secondRelayPin = new gpio(toSysfsPin(this.config.SECONDRELAYPIN), "out", undefined, {
+        unexportOnClose: false,
+      });
+      this.secondRelayPin.writeSync(0);
+    }
+
+    this.ledRingPin =new gpio(toSysfsPin(this.config.LEDRINGPIN), "out");
     this.ledRingPin.writeSync(0);
 
     this.visitorButtonPin = new gpio(
@@ -138,10 +223,17 @@ export class DCK {
   }
 
   private cleanup() {
+    this.stopLedWatch();
+    if (this.greenLightTimeout) {
+      clearTimeout(this.greenLightTimeout);
+      this.greenLightTimeout = null;
+    }
     try {
       this.carLoopPin?.unexport?.();
       this.bikeLoopPin?.unexport?.();
       this.carBarrierPin?.unexport?.();
+      this.secondRelayPin?.unexport?.();
+      this.secondRelayPin = null;
       this.ledRingPin?.unexport?.();
       this.visitorButtonPin?.unexport?.();
     } catch (err) {
