@@ -48,6 +48,20 @@ if (process.env.PRUEBAS_PANTALLA === 'true') {
     });
     res.json({ enviado: true, conectado: nestSocket.connected });
   });
+
+  // Simula una lectura del lector (QR o cedula) como lo hace el lector fisico.
+  console.log('[pruebas] Ruta POST /pruebas/lector habilitada');
+  app.post('/pruebas/lector', (req, res) => {
+    const nestSocket = require('./config/socket').default;
+    nestSocket.emit('reading_lector', {
+      devicesType: envConfig.DEVICETYPE,
+      url: '',
+      plate: '',
+      vehicleKind: 'CARRO',
+      ...req.body,
+    });
+    res.json({ enviado: true, conectado: nestSocket.connected });
+  });
 }
 
 // Manejo de conexión de clientes a WebSockets
